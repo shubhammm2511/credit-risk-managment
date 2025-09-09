@@ -1,12 +1,7 @@
-# app.py
-
 import streamlit as st
 import numpy as np
 import joblib
 import time
-
-# --- Page Config ---
-st.set_page_config(page_title="Executive Risk Analysis", page_icon="💼", layout="wide")
 
 # --- Load Model ---
 try:
@@ -15,95 +10,117 @@ except FileNotFoundError:
     st.error("Model file not found. Ensure 'credit_risk_model.pkl' is in the directory.")
     st.stop()
 
-# --- Custom CSS for styled boxes ---
-st.markdown("""
-<style>
-.metric-box {
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    padding: 15px;
-    text-align: center;
-    margin: 5px;
-    background-color: #073b4c; /* secondaryBackgroundColor from theme */
-}
-.metric-box h3 {
-    color: #fca311; /* primaryColor from theme */
-    margin-bottom: 5px;
-}
-.metric-box p {
-    font-size: 1.5rem;
-    margin: 0;
-}
-</style>
-""", unsafe_allow_html=True)
+# --- Page Config ---
+st.set_page_config(page_title="Customizable Risk App", page_icon="🎨", layout="centered")
 
-# --- App UI ---
-st.title("💼 Executive Credit Risk Dashboard")
+# --- Initialize Session State ---
+if "theme" not in st.session_state:
+    st.session_state.theme = "light"
+if "low_risk_color" not in st.session_state:
+    st.session_state.low_risk_color = "#28a745"
+if "high_risk_color" not in st.session_state:
+    st.session_state.high_risk_color = "#dc3545"
 
-# --- Input Fields using columns for a compact layout ---
+# --- Dynamic CSS based on session state ---
+def get_theme_css(theme, low_color, high_color):
+    if theme == "dark":
+        return f"""
+        <style>
+            .stApp {{
+                background-color: #0E1117;
+                color: #FAFAFA;
+            }}
+            .stProgress > div > div > div > div {{
+                background-color: {low_color};
+            }}
+            .low-risk-text {{ color: {low_color}; }}
+            .high-risk-text {{ color: {high_color}; }}
+        </style>
+        """
+    else:
+        return f"""
+        <style>
+            .stApp {{
+                background-color: #FFFFFF;
+                color: #0E1117;
+            }}
+            .stProgress > div > div > div > div {{
+                background-color: {low_color};
+            }}
+            .low-risk-text {{ color: {low_color}; }}
+            .high-risk-text {{ color: {high_color}; }}
+        </style>
+        """
+
+# Apply the dynamic theme
+st.markdown(get_theme_css(st.session_state.theme, st.session_state.low_risk_color, st.session_state.high_risk_color), unsafe_allow_html=True)
+
+# --- Sidebar for Customization ---
+with st.sidebar:
+    st.header("🎨 Appearance Settings")
+    
+    # Theme Toggle
+    if st.toggle("Enable Dark Mode", value=(st.session_state.theme == "dark")):
+        st.session_state.theme = "dark"
+    else:
+        st.session_state.theme = "light"
+
+    # Color Pickers
+    st.session_state.low_risk_color = st.color_picker("Low Risk Color", st.session_state.low_risk_color)
+    st.session_state.high_risk_color = st.color_picker("High Risk Color", st.session_state.high_risk_color)
+    
+    # Rerun to apply changes immediately
+    st.button("Apply Changes")
+
+# --- Main App UI ---
+st.title("Customizable Credit Risk Analyzer")
+st.info("Use the sidebar to change the theme and colors!")
+
+# Input fields
 with st.container(border=True):
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        age = st.number_input("Age", 18, 100, 30)
-        income = st.number_input("Annual Income ($)", 10000, 1000000, 50000, 1000)
-    with c2:
-        home_ownership = st.selectbox("Home Ownership", ["MORTGAGE", "RENT", "OWN", "OTHER"])
-        loan_amnt = st.number_input("Loan Amount ($)", 1000, 100000, 10000, 500)
-    with c3:
-        loan_grade = st.selectbox("Loan Grade", ["A", "B", "C", "D", "E", "F", "G"])
-        emp_length = st.slider("Employment Length (years)", 0, 40, 5)
+    age = st.number_input("Age", 18, 100, 30)
+    income = st.number_input("Annual Income", 10000, 200000, 50000)
+    loan_amnt = st.number_input("Loan Amount", 1000, 50000, 10000)
 
-# Hidden inputs in an expander for less critical info
-with st.expander("Additional Details"):
-    c4, c5, c6 = st.columns(3)
-    with c4:
-        loan_intent = st.selectbox("Loan Intent", ["DEBTCONSOLIDATION", "MEDICAL", "VENTURE", "PERSONAL", "EDUCATION", "HOMEIMPROVEMENT"])
-    with c5:
-        loan_int_rate = st.number_input("Interest Rate (%)", 5.0, 40.0, 10.0)
-    with c6:
-        default_on_file = st.radio("Previous Default?", ("No", "Yes"), horizontal=True)
-        cred_hist_length = st.number_input("Credit History Length (years)", 1, 50, 8)
+# Dummy inputs for demonstration
+home_ownership, emp_length, loan_intent, loan_grade, loan_int_rate, default_on_file, cred_hist_length = "MORTGAGE", 5, "PERSONAL", "B", 10.0, "No", 8
 
-if st.button("Run Full Spectrum Analysis", type="primary", use_container_width=True):
+if st.button("Analyze Risk", use_container_width=True):
     # --- Data Processing ---
+    # In a real app, you would collect all inputs as before
     loan_percent_income = loan_amnt / income if income > 0 else 0.0
-    home_map = {"RENT": 3, "OWN": 2, "MORTGAGE": 1, "OTHER": 0}
-    intent_map = {"EDUCATION": 0, "MEDICAL": 1, "VENTURE": 2, "PERSONAL": 3, "DEBTCONSOLIDATION": 4, "HOMEIMPROVEMENT": 5}
-    grade_map = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5, "G": 6}
-    default_map = {"Yes": 1, "No": 0}
-
+    home_map, intent_map, grade_map, default_map = {"MORTGAGE": 1}, {"PERSONAL": 3}, {"B": 1}, {"No": 0}
+    
     input_data = np.array([[
         age, income, home_map[home_ownership], emp_length, intent_map[loan_intent],
         grade_map[loan_grade], loan_amnt, loan_int_rate, loan_percent_income,
         default_map[default_on_file], cred_hist_length
     ]])
 
-    # --- Simulated Long Process with st.status ---
-    with st.status("Performing deep analysis...", expanded=True) as status:
-        st.write("Connecting to credit bureau...")
-        time.sleep(1.5)
-        st.write("Analyzing financial history...")
-        time.sleep(2)
-        st.write("Running predictive models...")
-        prediction = model.predict(input_data)
-        prediction_proba = model.predict_proba(input_data)
-        time.sleep(1.5)
-        status.update(label="Analysis complete!", state="complete", expanded=False)
+    prediction = model.predict(input_data)
+    prediction_proba = model.predict_proba(input_data)
+    high_risk_prob = prediction_proba[0][1]
 
-    st.header("Analysis Report")
-    
-    # --- Display Results in Styled Boxes ---
-    res_c1, res_c2, res_c3 = st.columns(3)
-    
-    with res_c1:
-        st.markdown('<div class="metric-box"><h3>Final Verdict</h3></div>', unsafe_allow_html=True)
-        if prediction[0] == 0:
-            st.success("🟢 LOW RISK")
+    # --- Animated Progress Bar ---
+    st.subheader("Final Assessment")
+    progress_text = st.empty()
+    progress_bar = st.progress(0)
+
+    for percent_complete in range(101):
+        time.sleep(0.02)
+        progress_bar.progress(percent_complete)
+        if percent_complete < 50:
+            progress_text.text(f"Processing... {percent_complete}%")
         else:
-            st.error("🔴 HIGH RISK")
+            progress_text.text(f"Finalizing... {percent_complete}%")
+
+    progress_text.empty()
+    progress_bar.empty()
+
+    # --- Display Results with Custom Colors ---
+    if prediction[0] == 0:
+        st.markdown(f'## <span class="low-risk-text">Result: LOW RISK</span>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'## <span class="high-risk-text">Result: HIGH RISK</span>', unsafe_allow_html=True)
     
-    with res_c2:
-        st.markdown(f'<div class="metric-box"><h3>High Risk Probability</h3><p>{prediction_proba[0][1]:.2%}</p></div>', unsafe_allow_html=True)
-        
-    with res_c3:
-        st.markdown(f'<div class="metric-box"><h3>Loan-to-Income</h3><p>{loan_percent_income:.2%}</p></div>', unsafe_allow_html=True)
+    st.write(f"The probability of the applicant being high-risk is **{high_risk_prob:.2%}**.")
