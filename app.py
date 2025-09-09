@@ -1,12 +1,13 @@
 import streamlit as st
 import numpy as np
 import joblib
+import os
 
 # Load trained model
 try:
-    model = joblib.load('credit_risk_model_compressed.pkl')
+    model = joblib.load('credit_risk_model.pkl')  
 except FileNotFoundError:
-    st.error("Model file not found. Please make sure 'credit_risk_model_compressed.pkl' is in the same directory.")
+    st.error("Model file not found. Please make sure 'credit_risk_model.pkl' is in the same directory.")
     st.stop()
 except Exception as e:
     st.error(f"An error occurred while loading the model: {e}")
@@ -36,19 +37,9 @@ st.markdown("""
         text-align: center;
         font-family: 'Arial', sans-serif;
     }
-    .stHeader {
+    .stHeader, .stSubheader {
         color: #007bff;
         font-family: 'Arial', sans-serif;
-    }
-    .stSubheader {
-        color: #007bff;
-        font-family: 'Arial', sans-serif;
-    }
-    .stNumberInput, .stSelectbox, .stSlider {
-        border-radius: 10px;
-        border: 1px solid #ccc;
-        padding: 10px;
-        box-shadow: 0 2px 4px 0 rgba(0,0,0,0.1);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -83,7 +74,6 @@ with tab2:
 st.header("Additional Information")
 cred_hist_length = st.slider("Credit History Length (years)", 1, 50)
 default_on_file = st.selectbox("Default on File", ["Y", "N"])
-
 
 loan_percent_income = loan_amnt / income if income > 0 else 0.0
 
@@ -121,5 +111,4 @@ if st.button("Predict"):
 
 # --- Footer ---
 st.markdown("---")
-st.write("Developed by Gemini")
-st.write("This is an enhanced UI for a credit risk classification model.")
+st.write("Credit Risk Classification Model")
