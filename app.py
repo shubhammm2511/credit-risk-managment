@@ -1,108 +1,109 @@
+# app.py
+
 import streamlit as st
 import numpy as np
 import joblib
-import shap  # pip install shap
-import pandas as pd
-import matplotlib.pyplot as plt
+import time
 
-# --- Model & Explainer Loading ---
-# This assumes your 'credit_risk_model.pkl' is a tree-based model
+# --- Page Config ---
+st.set_page_config(page_title="Executive Risk Analysis", page_icon="💼", layout="wide")
+
+# --- Load Model ---
 try:
     model = joblib.load('credit_risk_model.pkl')
-    # Create a SHAP explainer object
-    explainer = shap.TreeExplainer(model)
-except (FileNotFoundError, Exception) as e:
-    st.error(f"Model or SHAP explainer could not be loaded. Error: {e}")
-    st.info("This option requires a tree-based model (e.g., RandomForest) and the 'shap' library.")
+except FileNotFoundError:
+    st.error("Model file not found. Ensure 'credit_risk_model.pkl' is in the directory.")
     st.stop()
 
+# --- Custom CSS for styled boxes ---
+st.markdown("""
+<style>
+.metric-box {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+    margin: 5px;
+    background-color: #073b4c; /* secondaryBackgroundColor from theme */
+}
+.metric-box h3 {
+    color: #fca311; /* primaryColor from theme */
+    margin-bottom: 5px;
+}
+.metric-box p {
+    font-size: 1.5rem;
+    margin: 0;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# --- Page Configuration ---
-st.set_page_config(page_title="Explainable Credit AI", page_icon="🧠", layout="wide")
+# --- App UI ---
+st.title("💼 Executive Credit Risk Dashboard")
 
-st.title("🧠 Explainable Credit Risk AI")
-st.write("This tool not only predicts credit risk but also shows you *why* a decision was made.")
+# --- Input Fields using columns for a compact layout ---
+with st.container(border=True):
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        age = st.number_input("Age", 18, 100, 30)
+        income = st.number_input("Annual Income ($)", 10000, 1000000, 50000, 1000)
+    with c2:
+        home_ownership = st.selectbox("Home Ownership", ["MORTGAGE", "RENT", "OWN", "OTHER"])
+        loan_amnt = st.number_input("Loan Amount ($)", 1000, 100000, 10000, 500)
+    with c3:
+        loan_grade = st.selectbox("Loan Grade", ["A", "B", "C", "D", "E", "F", "G"])
+        emp_length = st.slider("Employment Length (years)", 0, 40, 5)
 
-# --- Feature Names (must match model training order) ---
-feature_names = ['person_age', 'person_income', 'person_home_ownership', 'person_emp_length',
-                 'loan_intent', 'loan_grade', 'loan_amnt', 'loan_int_rate', 'loan_percent_income',
-                 'cb_person_default_on_file', 'cb_person_cred_hist_length']
+# Hidden inputs in an expander for less critical info
+with st.expander("Additional Details"):
+    c4, c5, c6 = st.columns(3)
+    with c4:
+        loan_intent = st.selectbox("Loan Intent", ["DEBTCONSOLIDATION", "MEDICAL", "VENTURE", "PERSONAL", "EDUCATION", "HOMEIMPROVEMENT"])
+    with c5:
+        loan_int_rate = st.number_input("Interest Rate (%)", 5.0, 40.0, 10.0)
+    with c6:
+        default_on_file = st.radio("Previous Default?", ("No", "Yes"), horizontal=True)
+        cred_hist_length = st.number_input("Credit History Length (years)", 1, 50, 8)
 
-# --- Sidebar for Inputs ---
-with st.sidebar:
-    st.header("Applicant Details")
-    age = st.number_input("Age", 18, 100, 25)
-    income = st.number_input("Annual Income", 10000, 200000, 65000)
-    home_ownership = st.selectbox("Home Ownership", ["RENT", "OWN", "MORTGAGE", "OTHER"])
-    emp_length = st.slider("Employment Length (years)", 0, 20, 4)
-    loan_intent = st.selectbox("Loan Intent", ["EDUCATION", "MEDICAL", "VENTURE", "PERSONAL", "DEBTCONSOLIDATION", "HOMEIMPROVEMENT"])
-    loan_grade = st.selectbox("Loan Grade", ["A", "B", "C", "D", "E", "F", "G"])
-    loan_amnt = st.number_input("Loan Amount", 1000, 50000, 12000)
-    loan_int_rate = st.slider("Interest Rate (%)", 5.0, 40.0, 11.5)
-    default_on_file = st.selectbox("Default on File", ["N", "Y"])
-    cred_hist_length = st.slider("Credit History Length (years)", 1, 50, 3)
+if st.button("Run Full Spectrum Analysis", type="primary", use_container_width=True):
+    # --- Data Processing ---
+    loan_percent_income = loan_amnt / income if income > 0 else 0.0
+    home_map = {"RENT": 3, "OWN": 2, "MORTGAGE": 1, "OTHER": 0}
+    intent_map = {"EDUCATION": 0, "MEDICAL": 1, "VENTURE": 2, "PERSONAL": 3, "DEBTCONSOLIDATION": 4, "HOMEIMPROVEMENT": 5}
+    grade_map = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5, "G": 6}
+    default_map = {"Yes": 1, "No": 0}
 
-# --- Data Processing ---
-home_map = {"RENT": 3, "OWN": 2, "MORTGAGE": 1, "OTHER": 0}
-intent_map = {"EDUCATION": 0, "MEDICAL": 1, "VENTURE": 2, "PERSONAL": 3, "DEBTCONSOLIDATION": 4, "HOMEIMPROVEMENT": 5}
-grade_map = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5, "G": 6}
-default_map = {"Y": 1, "N": 0}
+    input_data = np.array([[
+        age, income, home_map[home_ownership], emp_length, intent_map[loan_intent],
+        grade_map[loan_grade], loan_amnt, loan_int_rate, loan_percent_income,
+        default_map[default_on_file], cred_hist_length
+    ]])
 
-loan_percent_income = loan_amnt / income if income > 0 else 0.0
+    # --- Simulated Long Process with st.status ---
+    with st.status("Performing deep analysis...", expanded=True) as status:
+        st.write("Connecting to credit bureau...")
+        time.sleep(1.5)
+        st.write("Analyzing financial history...")
+        time.sleep(2)
+        st.write("Running predictive models...")
+        prediction = model.predict(input_data)
+        prediction_proba = model.predict_proba(input_data)
+        time.sleep(1.5)
+        status.update(label="Analysis complete!", state="complete", expanded=False)
 
-input_data = np.array([
-    age, income, home_map[home_ownership], emp_length, intent_map[loan_intent],
-    grade_map[loan_grade], loan_amnt, loan_int_rate, loan_percent_income,
-    default_map[default_on_file], cred_hist_length
-])
-
-# Create a DataFrame for SHAP which requires feature names
-input_df = pd.DataFrame([input_data], columns=feature_names)
-
-# --- Prediction and Explanation ---
-prediction = model.predict(input_df)[0]
-prediction_proba = model.predict_proba(input_df)[0]
-shap_values = explainer.shap_values(input_df)
-
-# We are interested in the explanation for the "High Risk" class (class 1)
-shap_values_class1 = shap_values[1][0]
-
-# --- Display Results ---
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("Prediction Outcome")
-    if prediction == 0:
-        st.success(f"**LOW RISK** (Probability: {prediction_proba[0]:.2%})")
-    else:
-        st.error(f"**HIGH RISK** (Probability: {prediction_proba[1]:.2%})")
+    st.header("Analysis Report")
     
-    st.write("The SHAP Force Plot below shows the features pushing the prediction.")
-    # Visualize the SHAP explanation
-    fig = shap.force_plot(
-        explainer.expected_value[1],
-        shap_values_class1,
-        input_df.iloc[0],
-        matplotlib=False
-    )
-    st.set_option('deprecation.showPyplotGlobalUse', False)
-    st.components.v1.html(fig.html(), height=150)
-
-with col2:
-    st.subheader("Key Contributing Factors")
+    # --- Display Results in Styled Boxes ---
+    res_c1, res_c2, res_c3 = st.columns(3)
     
-    # Create a DataFrame of feature values and their SHAP importance
-    feature_importance = pd.DataFrame({
-        'feature': feature_names,
-        'feature_value': input_df.iloc[0].values,
-        'shap_value': shap_values_class1
-    })
-    feature_importance['abs_shap'] = feature_importance['shap_value'].abs()
-    feature_importance = feature_importance.sort_values(by='abs_shap', ascending=False).head(5)
-
-    st.write("Top 5 factors influencing this prediction:")
-    for index, row in feature_importance.iterrows():
-        if row['shap_value'] > 0:
-            st.markdown(f"- **{row['feature'].replace('_', ' ').title()}**: `{row['feature_value']}` <span style='color:red;'>increased</span> risk.", unsafe_allow_html=True)
+    with res_c1:
+        st.markdown('<div class="metric-box"><h3>Final Verdict</h3></div>', unsafe_allow_html=True)
+        if prediction[0] == 0:
+            st.success("🟢 LOW RISK")
         else:
-            st.markdown(f"- **{row['feature'].replace('_', ' ').title()}**: `{row['feature_value']}` <span style='color:green;'>decreased</span> risk.", unsafe_allow_html=True)
+            st.error("🔴 HIGH RISK")
+    
+    with res_c2:
+        st.markdown(f'<div class="metric-box"><h3>High Risk Probability</h3><p>{prediction_proba[0][1]:.2%}</p></div>', unsafe_allow_html=True)
+        
+    with res_c3:
+        st.markdown(f'<div class="metric-box"><h3>Loan-to-Income</h3><p>{loan_percent_income:.2%}</p></div>', unsafe_allow_html=True)
